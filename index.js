@@ -1,79 +1,53 @@
-let requestInProgress = false;
-/**
- * @type {Array<() => Promise<void>}
- */
-const requestQueue = [];
+class AsyncQueue {
+  constructor() {
+    this.queue = [];
+    this.isProcessing = false;
+  }
 
-function fooRequest() {
-  enqueueRequest(async () => {
-    if (requestInProgress) {
-      console.log("=== Request canceled ===");
-      return;
+  enqueue(task) {
+    this.queue.push(task);
+    this.processQueue();
+  }
+
+  async processQueue() {
+    if (this.isProcessing) return;
+    this.isProcessing = true;
+
+    while (this.queue.length > 0) {
+      const currentTask = this.queue.shift();
+      await currentTask();
     }
 
-    requestInProgress = true;
-
-    new Promise((resolve) => {
-      console.log("> foo started");
-      setTimeout(() => {
-        console.log("< foo finished\n");
-        resolve();
-      }, 1000);
-    }).finally(() => {
-      requestInProgress = false;
-      executeNextRequest();
-    });
-  });
-}
-
-function barRequest() {
-  enqueueRequest(async () => {
-    if (requestInProgress) {
-      console.log("=== Request canceled ===");
-      return;
-    }
-
-    requestInProgress = true;
-
-    new Promise((resolve) => {
-      console.log(">> bar started");
-      setTimeout(() => {
-        console.log("<< bar finished\n");
-        resolve();
-      }, 2000);
-    }).finally(() => {
-      requestInProgress = false;
-      executeNextRequest();
-    });
-  });
-}
-
-function executeNextRequest() {
-  if (requestQueue.length > 0) {
-    const nextRequest = requestQueue.shift();
-    nextRequest && nextRequest();
+    this.isProcessing = false;
   }
 }
 
-function enqueueRequest(requestFunc) {
-  if (requestInProgress) {
-    requestQueue.push(requestFunc);
-  } else {
-    requestFunc();
-  }
+const q = new AsyncQueue();
+
+function logQueue() {
+  console.log("Queue pending process:", q.queue.length);
 }
 
-function main() {
-  setInterval(() => {
-    enqueueRequest(() => fooRequest());
-  }, 1000);
+const fetchFoo = async () => {
+  console.log("> Fetching Foo...");
+  await new Promise((resolve) => setTimeout(resolve, 1e3));
+  console.log("> Foo fetched.");
+  logQueue();
+};
 
-  setInterval(() => {
-    enqueueRequest(() => barRequest());
-  }, 5000);
+const fetchBar = async () => {
+  console.log("<< Fetching Bar...");
+  await new Promise((resolve) => setTimeout(resolve, 2e3));
+  console.log("<< Bar fetched.");
+  logQueue();
+};
 
-  console.log("Started");
-  console.log("Press Ctrl+C to stop");
-}
+// represents a repeating task
+setInterval(() => {
+  q.enqueue(fetchFoo);
+}, 3000);
 
-main();
+// represents a user action
+setInterval(() => {
+  q.enqueue(fetchBar);
+}, 6000);
